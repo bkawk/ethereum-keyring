@@ -1,0 +1,131 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../aes-256-cbc-pbkdf2-30k/aes-256-cbc-pbkdf2-30k.html">
+<script src="./bower_components/eth-hd-keyring-browserified/eth-hd-keyring.min.js" async></script>
+<!--
+`ethereum-keyring`
+some description
+
+@demo demo/index.html
+-->
+
+<dom-module id="ethereum-keyring">
+  <template>
+    <style>
+      :host {
+        display: block;
+      }
+    </style>
+    <aes-256-cbc-pbkdf2-30k 
+      id="vault"
+      working="{{working}}"
+      direction="{{direction}}" 
+      password="{{password}}"  
+      hash="{{hash}}"
+      mnemonic="{{mnemonic}}"
+      initialization-vector="{{iv}}"
+      debug>
+    </aes-256-cbc-pbkdf2-30k>
+  </template>
+
+  <script>
+    class EthereumKeyring extends Polymer.Element {
+      static get is() { return 'ethereum-keyring'; }
+      static get properties() {
+        return {
+          keyring: {
+            type: Object,
+            notify: true,
+          },
+          working:{
+            type: Boolean,
+            notify: true,
+          },
+          mnemonic:{
+            type: String,
+            notify: true,
+            observer: '_keyring'
+          },
+          password:{
+            type: String,
+            value: 'passwordtest'
+          }
+        };
+      }
+
+    connectedCallback(){
+      super.connectedCallback();
+      //this.makeKeyring(this.password)
+      //this.importMnemonic("swap owner abuse era spice view grace pulse decline surprise blame biology", this.password)
+      //this.openKeyring(this.password)
+      //this.renameAddress('Will');
+    }      
+    makeKeyring(password){
+      if(!localStorage.getItem("public") && password){
+        if(this.debug){console.debug('Making you a keyring now')}
+        this.keyring = null;
+        this.keyring = new HdKeyring.HdKeyring({
+          numberOfAccounts: 1,
+        });  
+        this.keyring.getAccounts().then(function(value) {
+          localStorage.setItem("public", JSON.stringify({address: value[0], name:"default"}));
+          this.mnemonic = this.iv = this.hash = this.password = this.direction = null;
+          this.password = password;
+          this.mnemonic = this.keyring.mnemonic;
+          this.direction = 'encrypt';
+        }.bind(this)).catch(function(error) {
+          console.log(error);
+        })
+      }
+    }
+    importMnemonic(mnemonic, password){
+      if(!localStorage.getItem("public") && mnemonic && password){
+        this.keyring = null;
+        this.keyring = new HdKeyring.HdKeyring({
+          mnemonic: mnemonic, numberOfAccounts: 1
+        });  
+        this.keyring.getAccounts().then(function(value) {
+          localStorage.setItem("public", JSON.stringify({address: value[0], name:"default"}));
+          this.mnemonic = this.iv = this.hash = this.password = this.direction = null;
+          this.password = password;
+          this.mnemonic = mnemonic;
+          this.direction = 'encrypt';
+        }.bind(this)).catch(function(error) {
+          console.log(error);
+        })
+      }  
+    }
+    openKeyring(password){
+      if(password && localStorage.getItem('vault')){
+        this.keyring = this.mnemonic = this.iv = this.hash = this.password = this.direction = null;
+        var vault = JSON.parse(localStorage.getItem('vault'));
+        this.iv = vault.iv;
+        this.hash = vault.hash;
+        this.password = password;
+        this.direction = 'decrypt';
+      }
+    }
+    closeKeyring(){
+      this.keyring = null
+    }
+    renameAddress(name){
+      if(name && localStorage.getItem('public')){
+        var publickey = JSON.parse(localStorage.getItem('public'));
+        publickey.name = name
+        localStorage.setItem("public", JSON.stringify(publickey));
+      }
+    }
+    deleteKeyring(){
+      localStorage.removeItem('public');
+      localStorage.removeItem('vault');
+    }
+
+    _keyring(){
+      if(this.mnemonic){
+        this.keyring = new HdKeyring.HdKeyring({
+          mnemonic: this.mnemonic
+        });  
+      }
+    }
+    } window.customElements.define(EthereumKeyring.is, EthereumKeyring);
+  </script>
+</dom-module>
