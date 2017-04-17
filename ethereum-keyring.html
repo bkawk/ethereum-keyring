@@ -27,19 +27,6 @@ some description
             type: Object,
             notify: true,
           },
-          working:{
-            type: Boolean,
-            notify: true,
-          },
-          mnemonic:{
-            type: String,
-            notify: true,
-            observer: '_keyring'
-          },
-          password:{
-            type: String,
-            value: 'passwordtest'
-          },
           debug:{
             type: Boolean,
             value: true
@@ -49,19 +36,13 @@ some description
 
     connectedCallback(){
       super.connectedCallback();
-      
-        this.makeKeyring(this.password).then(function(response) {
-          console.log("============ YES !")
-          console.log(response)
-        }).catch(function(error) {
-          console.log("============ NOO !")
-          console.log(error)
-        })
-
-      //this.makeKeyring(this.password)
-      //this.importMnemonic("swap owner abuse era spice view grace pulse decline surprise blame biology", this.password)
-      //this.openKeyring(this.password)
-      //this.renameAddress('Will');
+        // this.makeKeyring(this.password).then(function(response) {
+        //   console.log("============ YES !")
+        //   console.log(response)
+        // }).catch(function(error) {
+        //   console.log("============ NOO !")
+        //   console.log(error)
+        // })
     }      
     makeKeyring(password){
       return new Promise(function(resolve, reject) {
@@ -71,18 +52,18 @@ some description
           this.keyring = new HdKeyring.HdKeyring({
             numberOfAccounts: 1,
           });  
+          var adddress
           this.keyring.getAccounts()
           .then(function(value) {
-
+            adddress = value
             if(this.debug){console.debug('Requesting vault to encrypt now')}
-            this.$.vault.encrypt(this.keyring.mnemonic, password).then(function(response) {
+            return this.$.vault.encrypt(this.keyring.mnemonic, password)
+          }.bind(this))
+          .then(function(response) {
               if(this.debug){console.debug(response)}
               if(this.debug){console.debug('Saving public to local storage')}
-              localStorage.setItem("public", JSON.stringify({address: value[0], name:"default"}));  
+              localStorage.setItem("public", JSON.stringify({address: adddress[0], name:"default"}));  
               resolve(response)
-            }.bind(this))
-
-
           }.bind(this))
           .catch(function(error) {
             console.log(error);
@@ -94,54 +75,95 @@ some description
       }.bind(this))
     }
     importMnemonic(mnemonic, password){
-      if(!localStorage.getItem("public") && mnemonic && password){
-        this.keyring = null;
-        this.keyring = new HdKeyring.HdKeyring({
-          mnemonic: mnemonic, numberOfAccounts: 1
-        });  
-        this.keyring.getAccounts().then(function(value) {
-          localStorage.setItem("public", JSON.stringify({address: value[0], name:"default"}));
-          this.mnemonic = this.iv = this.hash = this.password = this.direction = null;
-          this.password = password;
-          this.mnemonic = mnemonic;
-          this.direction = 'encrypt';
-        }.bind(this)).catch(function(error) {
-          console.log(error);
-        })
-      }  
+      return new Promise(function(resolve, reject) {
+        if(this.debug){console.debug('Making a vault from your mnemonic!')}
+        if(!localStorage.getItem("public") && mnemonic && password){
+          this.keyring = null;
+          this.keyring = new HdKeyring.HdKeyring({
+            mnemonic: mnemonic, numberOfAccounts: 1
+          });  
+          var adddress
+          this.keyring.getAccounts().then(function(value) {
+            adddress = value
+            if(this.debug){console.debug('Requesting vault to encrypt now')}
+            return this.$.vault.encrypt(mnemonic, password)
+          }.bind(this))
+          .then(function(response) {
+            if(this.debug){console.debug('Saving public to local storage')}
+            localStorage.setItem("public", JSON.stringify({address: adddress[0], name:"default"}));
+            resolve(response)
+          }.bind(this))
+          .catch(function(error) {
+            console.log(error);
+            reject(error)
+          })
+        } else {
+          if(this.debug){console.debug('You already have a vault!')}
+        }
+      }.bind(this))
     }
     openKeyring(password){
-      if(password && localStorage.getItem('vault')){
-        this.keyring = this.mnemonic = this.iv = this.hash = this.password = this.direction = null;
-        var vault = JSON.parse(localStorage.getItem('vault'));
-        this.iv = vault.iv;
-        this.hash = vault.hash;
-        this.password = password;
-        this.direction = 'decrypt';
-      }
+      return new Promise(function(resolve, reject) {
+        if(this.debug){console.debug('Attempting to fetch local vault')}
+        if(password && localStorage.getItem('vault')){
+          if(this.debug){console.debug('Local vault found')}
+          var vault = JSON.parse(localStorage.getItem('vault'));
+          if(this.debug){console.debug('Requesting vault to decrypt now')}
+          this.$.vault.decrypt(vault.hash, vault.iv, password).then(function(value) {
+            this.keyring = value.mnemonic;
+            resolve(value)
+          }.bind(this))
+        } else {
+          if(this.debug){console.debug('You have no vault!')}
+          reject(error)
+        }
+      }.bind(this))
     }
     closeKeyring(){
-      this.keyring = null
+      return new Promise(function(resolve, reject) {
+        this.keyring = null
+      })
     }
     renameAddress(name){
-      if(name && localStorage.getItem('public')){
-        var publickey = JSON.parse(localStorage.getItem('public'));
-        publickey.name = name
-        localStorage.setItem("public", JSON.stringify(publickey));
-      }
+      return new Promise(function(resolve, reject) {
+        if(name && localStorage.getItem('public')){
+          var publickey = JSON.parse(localStorage.getItem('public'));
+          publickey.name = name
+          localStorage.setItem("public", JSON.stringify(publickey));
+          resolve()
+        } else {
+          if(this.debug){console.debug('You have not send me a name or you dont have a vault!')}
+          reject()
+        }
+      })
     }
     deleteKeyring(){
-      localStorage.removeItem('public');
-      localStorage.removeItem('vault');
+      return new Promise(function(resolve, reject) {
+        if(localStorage.removeItem('public') && localStorage.removeItem('vault')){
+          if(this.debug){console.debug('Deleting local vault now')}
+          localStorage.removeItem('public');
+          localStorage.removeItem('vault');
+          resolve()
+        } else {
+          if(this.debug){console.debug('No local vault to delete')}
+          reject()
+        }
+      })
     }
 
-    _keyring(){
-      if(this.mnemonic){
-        this.keyring = new HdKeyring.HdKeyring({
-          mnemonic: this.mnemonic
-        });  
-      }
+    keyring(mnemonic){
+      return new Promise(function(resolve, reject) {
+        if(mnemonic){
+          this.keyring = new HdKeyring.HdKeyring({
+            mnemonic: mnemonic
+          });  
+          resolve(this.keyring);
+        } else {
+          reject();
+        }
+      })
     }
+
     } window.customElements.define(EthereumKeyring.is, EthereumKeyring);
   </script>
 </dom-module>
